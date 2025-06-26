@@ -1,0 +1,17 @@
+.hello {
+  color: red;
+}
+
+.mapboxgl-popup-content {
+  background-color: #232D3F;
+}
+
+.mapboxgl-popup-tip {
+  opacity: 0;
+}
+
+.mapboxgl-popup,
+.mapboxgl-popup *
+{
+  pointer-events: none !important;
+}
