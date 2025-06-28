@@ -35,3 +35,9 @@ export function getIntersection(bounds: LngLatBounds,
     return [intersection[0].geometry.coordinates[0], intersection[0].geometry.coordinates[1]];
   return  [0, 0];
 }
+
+
+export let geoToName : Map<string, string> = new Map();
+export let nameToGeo : Map<string, number> = new Map();
+export let nameToStat: Map<string, string> = new Map();
+export let statToName: Map<string, string> = new Map();

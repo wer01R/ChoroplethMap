@@ -1,8 +1,6 @@
 import { Box, FormControl, Grid, Input, InputLabel, MenuItem, Paper, Select, Typography } from "@mui/material";
-import { useSelector } from "react-redux";
 import { useAppDispatch, useAppSelector } from "../../lib/store/hooks";
-import SelectInput from "@mui/material/Select/SelectInput";
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import agent from "../../lib/api/agent";
 import { statData } from "../../lib/types";
 import { setSelectStat, setSelectYear, setStat } from "../../lib/store/statistics";

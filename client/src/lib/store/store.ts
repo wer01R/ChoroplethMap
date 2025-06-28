@@ -1,13 +1,13 @@
 import { configureStore } from "@reduxjs/toolkit";
 import colorsReducer from './notes'
 import statReducer from './statistics'
-import mapReducer from './mapRef'
+import mapReducer from './setMap'
 
 const store = configureStore({
   reducer: {
     notes: colorsReducer,
     stat: statReducer,
-    map: mapReducer
+    setMap: mapReducer
   },
 });
 

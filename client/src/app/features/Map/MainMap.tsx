@@ -3,25 +3,26 @@ import mapboxgl, { Map as MapBoxMap, MapMouseEvent, MapMouseEventType, Popup } f
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { GeoJSONFeatureCollection, statData } from '../../../lib/types';
 import { FeatureCollection, GeoJSON, GeoJsonProperties, Geometry, MultiPolygon } from 'geojson';
-import _ from 'lodash'
+import _, { map } from 'lodash'
 import agent from '../../../lib/api/agent';
 import { useAppDispatch, useAppSelector } from '../../../lib/store/hooks';
 import { setNum } from '../../../lib/store/notes';
-import { getIntersection, provinceNames } from '../../../lib/util/util';
+import { geoToName, getIntersection, nameToGeo, nameToStat, provinceNames, statToName } from '../../../lib/util/util';
 import center from '@turf/center';
 import createReactPopup from '../../../lib/util/createReactPopup';
 import StatToolkits from '../../shared/component/StatToolkits';
 import bbox from '@turf/bbox';
-import { setMap } from '../../../lib/store/mapRef';
+import { setMapFlyto, setMapGeoJson } from '../../../lib/store/setMap';
 
 export default function MainMap() {
   const mapContainerRef = useRef<HTMLDivElement>(null);
-  const [geojson, setGeojson] = useState<GeoJSONFeatureCollection>();
   const [loaded, setLoaded] = useState<Boolean>(false);
   const mapRef = useRef<MapBoxMap>(null);
   const isReturningRef = useRef(false);
+  const geojson = useAppSelector(state => state.setMap.geoJson);
   const notes = useAppSelector(state => state.notes);
   const stat = useAppSelector(state => state.stat);
+  const mapFlyto = useAppSelector(state => state.setMap.mapFlyto);
   let boundary: [[number, number], [number, number]] = [
     [74.576, 8.776],
     [147.957, 53.655]
@@ -32,23 +33,22 @@ export default function MainMap() {
   const popUp = useRef(new mapboxgl.Popup({
     closeButton: false,
     closeOnClick: false
-  }))
-  const { nameToGeo, geoToName } = useMemo(() => {
-    const nameToGeo = new Map(), geoToName = new Map();
-    geojson?.features.forEach((feature) => {
+  }));
+
+
+  useMemo(() => {
+    geojson?.features.forEach((feature, index) => {
       for (let name of provinceNames) {
-        if (feature.properties.NL_NAME_1.includes(name)) {
-          nameToGeo.set(name, feature.properties.NL_NAME_1);
-          geoToName.set(feature.properties.NL_NAME_1, name);
+        if (feature.properties.name.includes(name)) {
+          nameToGeo.set(name, index);
+          geoToName.set(feature.properties.name, name);
           break;
         }
       }
-    })
-    return { nameToGeo, geoToName }
+    });
   }, [geojson]);
 
-  const { nameToStat, statToName } = useMemo(() => {
-    const nameToStat = new Map(), statToName = new Map();
+  useMemo(() => {
     if (stat !== null && stat.data !== null)
       Object.keys(stat.data!).forEach((statName) => {
         for (let name of provinceNames) {
@@ -59,13 +59,12 @@ export default function MainMap() {
           }
         }
       })
-    return { nameToStat, statToName }
   }, [stat]);
 
   const centers = useMemo(() => {
     const centers = new Map();
     geojson?.features.forEach(feature => {
-      centers.set(feature.properties.NL_NAME_1, center(feature.geometry as MultiPolygon));
+      centers.set(feature.properties.name, center(feature.geometry as MultiPolygon));
     });
     return centers;
   }, [geojson])
@@ -87,23 +86,27 @@ export default function MainMap() {
   useEffect(() => {
     if (!mapContainerRef.current) return;
     const onLoad = async () => {
-      dispatch(setMap(mapRef.current!));
-      const geojson = (await agent.get<GeoJSONFeatureCollection>('/geojson/gadm41_CHN_1.geojson')).data;
-      setGeojson(geojson);
-      mapRef.current?.addSource("province-source", {
-        type: 'geojson',
-        data: geojson as GeoJSON<Geometry, GeoJsonProperties>,
-      });
-      setLoaded(true);
-      mapRef.current?.addLayer({
-        id: 'province-outline',
-        type: 'line',
-        source: 'province-source',
-        paint: {
-          "line-color": "#ffffff",
-          "line-width": 1,
-        }
-      });
+      if (!geojson) {
+        const geo = (await agent.get<GeoJSONFeatureCollection>('https://geojson.cn/api/china/100000.json')).data;
+        dispatch(setMapGeoJson(geo));
+      }
+
+      if (geojson) {
+        mapRef.current?.addSource("province-source", {
+          type: 'geojson',
+          data: geojson as GeoJSON<Geometry, GeoJsonProperties>,
+        });
+        setLoaded(true);
+        mapRef.current?.addLayer({
+          id: 'province-outline',
+          type: 'line',
+          source: 'province-source',
+          paint: {
+            "line-color": "#ffffff",
+            "line-width": 1,
+          }
+        });
+      }
     }
     const mapToken = process.env.MAPBOX_TOKEN;
     mapboxgl.accessToken = mapToken;
@@ -134,7 +137,7 @@ export default function MainMap() {
       mapRef.current?.off('load', onLoad)
       setLoaded(false);
     }
-  }, [])
+  }, [geojson])
 
   useEffect(() => {
     if (stat && stat.data && loaded) {
@@ -149,14 +152,14 @@ export default function MainMap() {
       dispatch(setNum({ minNum: min, maxNum: max, colors: notes.colors, measure: notes.measure }))
 
       geojson?.features.forEach((feature) => {
-        const provinceName = feature.properties.NL_NAME_1;
+        const provinceName = feature.properties.name;
         if (hav_pro.has(provinceName)) return;
         hav_pro.add(provinceName);
         if (mapRef.current?.getLayer(`province-${provinceName}`)) {
           mapRef.current?.setPaintProperty(`province-${provinceName}`, 'fill-color', getColorBySet(((): number => {
-            const name = geoToName.get(feature.properties.NL_NAME_1);
-            if (nameToStat.has(name)) {
-              return stat.data![nameToStat.get(name)][stat.selectYear];
+            const name = geoToName.get(feature.properties.name);
+            if (name && nameToStat.has(name)) {
+              return stat.data![nameToStat.get(name)!][stat.selectYear];
             }
             return 0;
           })()));
@@ -166,7 +169,7 @@ export default function MainMap() {
             id: `province-${provinceName}`,
             type: 'fill',
             source: 'province-source',
-            filter: ['==', ['get', 'NL_NAME_1'], provinceName],
+            filter: ['==', ['get', 'name'], provinceName],
             paint: {
               'fill-color': getColorBySet(0),
               'fill-opacity': 1
@@ -176,17 +179,17 @@ export default function MainMap() {
       // mapRef.current?.on('mousedown', (e) => {console.log('clicked')})
       mapRef.current?.on('mousemove', (e) => {
         const features = mapRef.current?.queryRenderedFeatures(e.point, {
-          layers: geojson?.features.map(feature => `province-${feature.properties.NL_NAME_1}`)
+          layers: geojson?.features.map(feature => `province-${feature.properties.name}`)
         });
         if (!features || features.length === 0) {
           popUp.current.remove();
           preFeatureName = "";
-        } else if (features[0].properties?.NL_NAME_1 !== preFeatureName) {
-          preFeatureName = features[0].properties?.NL_NAME_1;
+        } else if (features[0].properties?.name !== preFeatureName) {
+          preFeatureName = features[0].properties?.name;
 
-          const data = stat.data![nameToStat.get(geoToName.get(preFeatureName))];
+          const data = stat.data![nameToStat.get(geoToName.get(preFeatureName)!)!];
           createReactPopup(centers.get(preFeatureName).geometry.coordinates,
-            <StatToolkits name={geoToName.get(preFeatureName)} measure={notes.measure}
+            <StatToolkits name={geoToName.get(preFeatureName)!} measure={notes.measure}
               data={data ? data[stat.selectYear] : data} />,
             popUp.current)
           popUp.current.addTo(mapRef.current!)
@@ -198,6 +201,11 @@ export default function MainMap() {
       popUp.current.remove();
     }
   }, [stat, loaded, notes])
+
+  useEffect(() => {
+    if (!mapFlyto) return;
+    mapRef.current?.fitBounds([[mapFlyto[0], mapFlyto[1]], [mapFlyto[2], mapFlyto[3]]])
+  }, [mapFlyto])
 
   if (loaded) {
     const box = bbox(geojson! as FeatureCollection)
@@ -218,9 +226,11 @@ export default function MainMap() {
         isReturningRef.current = true;
 
         const target = getIntersection(bounds, [center.lng, center.lat]);
-        mapRef.current?.easeTo({center: target[0] === 0 && target[1] === 0 
-          ? bounds.getCenter()
-          : target})
+        mapRef.current?.easeTo({
+          center: target[0] === 0 && target[1] === 0
+            ? bounds.getCenter()
+            : target
+        })
       }
     })
   }

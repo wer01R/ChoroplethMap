@@ -21,17 +21,13 @@ export interface GeoJSONFeature {
 }
 
 export interface ProvinceProperties {
-  GID_1: string
-  GID_0: string
-  COUNTRY: string
-  NAME_1: string      // 省名，比如“广东省”
-  VARNAME_1: string   // 变体名
-  NL_NAME_1: string   // 当地方言名或别名
-  TYPE_1: string      // 类型（如“省”）
-  ENGTYPE_1: string   // 英文类型
-  CC_1: string        // 国家代码？
-  HASC_1: string      // 行政区划代码（比如“CN.GD”）
-  ISO_1: string       // ISO 代码
+	name: string,
+	code: string,
+	level: Enum<0, 1, 2, 3>,
+	center: [lng, lat],
+	fullname?: string,
+	filename?: string,
+	pinyin?: string,
 }
 
 export interface Geometry {
